@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to assign admin role" }, { status: 500 });
     }
 
+    // Start a 14-day free trial on the Starter plan
+    await supabase.rpc("start_org_trial", { p_org_id: org.id });
+
     return NextResponse.json(org, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
