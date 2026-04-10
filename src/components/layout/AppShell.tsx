@@ -3,17 +3,23 @@
 import { useState } from "react";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
-import type { Organization } from "@/lib/supabase/types";
-import type { UserRole } from "@/lib/supabase/types";
+import type { Organization, UserRole, OrgPlatformSubDetails } from "@/lib/supabase/types";
 
 interface AppShellProps {
   org: Organization;
   userRole: UserRole;
   userId: string;
+  platformSub?: OrgPlatformSubDetails | null;
   children: React.ReactNode;
 }
 
-export default function AppShell({ org, userRole, userId, children }: AppShellProps) {
+export default function AppShell({
+  org,
+  userRole,
+  userId,
+  platformSub,
+  children,
+}: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -21,6 +27,7 @@ export default function AppShell({ org, userRole, userId, children }: AppShellPr
       <Sidebar
         org={org}
         userRole={userRole}
+        platformSub={platformSub ?? null}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />

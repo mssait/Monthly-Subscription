@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
-import type { Organization, UserRole } from "@/lib/supabase/types";
+import type { Organization, UserRole, OrgPlatformSubDetails } from "@/lib/supabase/types";
 import { ORG_TYPE_CONFIG } from "@/lib/constants/orgTypes";
 
 interface NavItem {
@@ -27,17 +27,60 @@ function getNavItems(slug: string): NavItem[] {
       icon: "⚙️",
       roles: ["org_admin"],
     },
+    {
+      label: "Billing",
+      href: `/org/${slug}/billing`,
+      icon: "🏷️",
+      roles: ["org_admin"],
+    },
   ];
 }
 
 interface SidebarProps {
   org: Organization;
   userRole: UserRole;
+  platformSub: OrgPlatformSubDetails | null;
   open: boolean;
   onClose: () => void;
 }
 
-export default function Sidebar({ org, userRole, open, onClose }: SidebarProps) {
+function PlanBadge({ sub }: { sub: OrgPlatformSubDetails | null }) {
+  if (!sub) return null;
+
+  const styles: Record<string, string> = {
+    active: "bg-emerald-100 text-emerald-700",
+    trial: "bg-blue-100 text-blue-700",
+    past_due: "bg-orange-100 text-orange-700",
+    cancelled: "bg-gray-100 text-gray-500",
+    expired: "bg-red-100 text-red-700",
+  };
+
+  const labels: Record<string, string> = {
+    active: sub.plan_name,
+    trial: `Trial · ${sub.plan_name}`,
+    past_due: "Past due",
+    cancelled: "Cancelled",
+    expired: "Expired",
+  };
+
+  return (
+    <span
+      className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${
+        styles[sub.status] ?? styles.cancelled
+      }`}
+    >
+      {labels[sub.status] ?? sub.plan_name}
+    </span>
+  );
+}
+
+export default function Sidebar({
+  org,
+  userRole,
+  platformSub,
+  open,
+  onClose,
+}: SidebarProps) {
   const pathname = usePathname();
   const navItems = getNavItems(org.slug).filter(
     (item) => !item.roles || item.roles.includes(userRole)
@@ -49,7 +92,7 @@ export default function Sidebar({ org, userRole, open, onClose }: SidebarProps) 
       {/* Logo / Org name */}
       <div className="flex items-center gap-3 px-4 py-5 border-b">
         <span className="text-2xl">{orgConfig.emoji}</span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-900 truncate">{org.name}</p>
           <p className={`text-xs ${orgConfig.color}`}>{orgConfig.label}</p>
         </div>
@@ -77,8 +120,9 @@ export default function Sidebar({ org, userRole, open, onClose }: SidebarProps) 
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="border-t px-4 py-3">
+      {/* Footer — plan badge */}
+      <div className="border-t px-4 py-3 space-y-1.5">
+        <PlanBadge sub={platformSub} />
         <p className="text-xs text-gray-400">
           Powered by{" "}
           <span className="font-semibold text-emerald-600">Znifa</span>

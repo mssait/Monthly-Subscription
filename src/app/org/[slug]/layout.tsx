@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AppShell from "@/components/layout/AppShell";
+import TrialBanner from "@/components/billing/TrialBanner";
+import type { OrgPlatformSubDetails } from "@/lib/supabase/types";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
@@ -37,12 +39,24 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     .single();
 
   if (!membership) {
-    // User is not a member of this org
     redirect("/");
   }
 
+  // Load platform subscription status
+  const { data: rawSub } = await supabase.rpc("get_org_platform_sub", {
+    p_org_id: org.id,
+  });
+
+  const platformSub = (rawSub as OrgPlatformSubDetails | null) ?? null;
+
   return (
-    <AppShell org={org} userRole={membership.role} userId={user.id}>
+    <AppShell
+      org={org}
+      userRole={membership.role}
+      userId={user.id}
+      platformSub={platformSub}
+    >
+      <TrialBanner sub={platformSub} slug={slug} />
       {children}
     </AppShell>
   );
