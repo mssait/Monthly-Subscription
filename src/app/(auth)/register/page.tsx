@@ -8,9 +8,41 @@ import { generateSlug } from "@/lib/utils/slug";
 import { ORG_TYPE_OPTIONS } from "@/lib/constants/orgTypes";
 import { toast } from "sonner";
 
+// Key used to persist pending org details across the email confirmation redirect
+const PENDING_ORG_KEY = "znifa_pending_org";
+
+export function savePendingOrg(data: {
+  name: string;
+  slug: string;
+  org_type: string;
+}) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(PENDING_ORG_KEY, JSON.stringify(data));
+  }
+}
+
+export function loadPendingOrg(): {
+  name: string;
+  slug: string;
+  org_type: string;
+} | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PENDING_ORG_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingOrg() {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(PENDING_ORG_KEY);
+  }
+}
+
 export default function RegisterPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"account" | "org">("account");
   const [loading, setLoading] = useState(false);
 
   const [email, setEmail] = useState("");
@@ -33,6 +65,10 @@ export default function RegisterPage() {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        // After clicking the confirmation link, land back on the app
+        emailRedirectTo: `${window.location.origin}/auth/confirm`,
+      },
     });
 
     if (authError) {
@@ -41,32 +77,26 @@ export default function RegisterPage() {
       return;
     }
 
-    // If email confirmation is enabled, user won't have a session yet.
-    // Try signing in immediately to get a session.
-    let userId = authData.user?.id;
-
-    if (!authData.session) {
-      const { data: signInData, error: signInError } =
-        await supabase.auth.signInWithPassword({ email, password });
-
-      if (signInError || !signInData.user) {
-        // Email confirmation is required — tell the user
-        toast.info(
-          "Account created! Please check your email to confirm your account, then sign in."
-        );
-        router.push("/login");
-        return;
-      }
-      userId = signInData.user.id;
-    }
-
-    if (!userId) {
-      toast.error("Sign up failed — please try again");
-      setLoading(false);
+    // 2a. Session exists immediately — email confirmation is disabled (dev mode)
+    if (authData.session && authData.user) {
+      await createOrg(authData.user.id);
       return;
     }
 
-    // 2. Create organisation (via API route to use service role)
+    // 2b. No session — email confirmation is required.
+    // Save org details so /auth/confirm can finish the job after the user clicks
+    // the link in their email.
+    savePendingOrg({ name: orgName, slug: orgSlug, org_type: orgType });
+
+    toast.info(
+      "Account created! Check your email and click the confirmation link to continue.",
+      { duration: 8000 }
+    );
+    router.push("/login");
+    setLoading(false);
+  }
+
+  async function createOrg(userId: string) {
     const response = await fetch("/api/orgs/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -85,6 +115,7 @@ export default function RegisterPage() {
       return;
     }
 
+    clearPendingOrg();
     toast.success("Organisation created! Redirecting...");
     router.push(`/org/${orgSlug}/dashboard`);
     router.refresh();

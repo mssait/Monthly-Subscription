@@ -4,12 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { loadPendingOrg, clearPendingOrg } from "@/app/(auth)/register/page";
 import { toast } from "sonner";
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo");
+  const confirmError = searchParams.get("error") === "confirmation_failed";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,6 +31,35 @@ export default function LoginPage() {
       toast.error(error.message);
       setLoading(false);
       return;
+    }
+
+    // If a pending org exists in localStorage (user confirmed email and came
+    // back to log in), create the org now before redirecting.
+    const pending = loadPendingOrg();
+    if (pending) {
+      const response = await fetch("/api/orgs/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: pending.name,
+          slug: pending.slug,
+          org_type: pending.org_type,
+          user_id: data.user.id,
+        }),
+      });
+
+      if (response.ok) {
+        clearPendingOrg();
+        toast.success("Organisation created! Welcome to Znifa.");
+        router.push(`/org/${pending.slug}/dashboard`);
+        router.refresh();
+        return;
+      } else {
+        const err = await response.json();
+        toast.error(err.error ?? "Failed to create organisation");
+        setLoading(false);
+        return;
+      }
     }
 
     // If there's an explicit redirectTo (e.g. from middleware), use it
@@ -68,6 +99,13 @@ export default function LoginPage() {
         <p className="text-sm text-gray-500 mb-6">
           Welcome back. Sign in to your Znifa account.
         </p>
+
+        {confirmError && (
+          <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            Email confirmation failed or the link has expired. Please request a
+            new confirmation email by registering again.
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
